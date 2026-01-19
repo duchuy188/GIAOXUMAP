@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, Upload, MapPin } from "lucide-react";
 import { Map } from "@/components/ui/map";
 import type MapLibreGL from "maplibre-gl";
@@ -26,6 +26,62 @@ export default function AddParishModal({ isOpen, onClose, dioceses, onAddParish 
   const [showResults, setShowResults] = useState(false);
   const mapRef = useRef<MapLibreGL.Map | null>(null);
   const markerRef = useRef<MapLibreGL.Marker | null>(null);
+
+  // Setup map marker when map is ready
+  useEffect(() => {
+    if (!mapRef.current || !isOpen) return;
+
+    const map = mapRef.current;
+    
+    // Clean up old marker
+    if (markerRef.current) {
+      markerRef.current.remove();
+    }
+
+    // Wait a bit for map to be fully loaded
+    const timeoutId = setTimeout(() => {
+      try {
+        // Add draggable marker
+        const marker = new (window as any).maplibregl.Marker({
+          draggable: true,
+          color: "#ef4444",
+        })
+          .setLngLat([formData.lng, formData.lat])
+          .addTo(map);
+
+        markerRef.current = marker;
+
+        // Update position when marker is dragged
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          setFormData(prev => ({
+            ...prev,
+            lat: lngLat.lat,
+            lng: lngLat.lng,
+          }));
+        });
+
+        // Click on map to move marker
+        map.on("click", (e: any) => {
+          marker.setLngLat([e.lngLat.lng, e.lngLat.lat]);
+          setFormData(prev => ({
+            ...prev,
+            lat: e.lngLat.lat,
+            lng: e.lngLat.lng,
+          }));
+        });
+      } catch (error) {
+        console.error("Error setting up marker:", error);
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (markerRef.current) {
+        markerRef.current.remove();
+      }
+    };
+  }, [isOpen]);
 
   // Handle location search with Nominatim - auto search when typing
   const handleLocationSearch = async (query: string) => {
@@ -267,39 +323,6 @@ export default function AddParishModal({ isOpen, onClose, dioceses, onAddParish 
                 ref={mapRef}
                 center={[formData.lng, formData.lat]}
                 zoom={12}
-                onLoad={(map) => {
-                  mapRef.current = map;
-                  
-                  // Add draggable marker
-                  const marker = new (window as any).maplibregl.Marker({
-                    draggable: true,
-                    color: "#ef4444",
-                  })
-                    .setLngLat([formData.lng, formData.lat])
-                    .addTo(map);
-
-                  markerRef.current = marker;
-
-                  // Update position when marker is dragged
-                  marker.on("dragend", () => {
-                    const lngLat = marker.getLngLat();
-                    setFormData(prev => ({
-                      ...prev,
-                      lat: lngLat.lat,
-                      lng: lngLat.lng,
-                    }));
-                  });
-
-                  // Click on map to move marker
-                  map.on("click", (e: any) => {
-                    marker.setLngLat([e.lngLat.lng, e.lngLat.lat]);
-                    setFormData(prev => ({
-                      ...prev,
-                      lat: e.lngLat.lat,
-                      lng: e.lngLat.lng,
-                    }));
-                  });
-                }}
               />
             </div>
             
